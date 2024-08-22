@@ -25,7 +25,6 @@ export default function logsTable({ accessToken }: Props) {
     fetch(`${BACKEND_BASE}/jobs`, { headers })
       .then(r => r.json())
       .then(data => {
-        console.log(data)
         setLogs(data)
       })
   }, [accessToken])

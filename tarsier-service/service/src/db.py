@@ -1,10 +1,10 @@
-import os
+from settings import settings
 from typing import Any
 from sqlalchemy import create_engine, text, Row
 import uuid
 import json
 
-host = os.environ.get("DB_HOST") or "localhost"
+host = settings.db_host
 engine = create_engine(f"mysql+pymysql://user:password@{host}:3306/db") #docker compose ...@db:3306/db"
 
 with engine.connect() as conn:

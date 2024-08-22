@@ -15,9 +15,12 @@ class JsonSchemaValue(BaseModel):
             'properties': {k: v.to_dict() for k, v in (self.properties or {}).items()}
         }
     
+class PageTextOptions(BaseModel ):
+    return_image: bool = False
+
 class PageTextData(BaseModel):
     url: str
-    options: dict[str, bool] | None = None
+    options: PageTextOptions = None
 
 
 class ExtractOptions(BaseModel):

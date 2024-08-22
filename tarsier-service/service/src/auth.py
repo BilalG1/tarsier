@@ -1,4 +1,4 @@
-import os
+from settings import settings
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from propelauth_fastapi import init_auth, User
@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 
 load_dotenv() 
-auth = init_auth("https://6966894145.propelauthtest.com", os.environ["PROPEL_AUTH_API_KEY"])
+auth = init_auth("https://6966894145.propelauthtest.com", settings.propel_auth_api_key)
 security = HTTPBearer()
 
 def validate_api_key(credentials: HTTPAuthorizationCredentials = Security(security)):

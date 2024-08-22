@@ -1,5 +1,6 @@
-import os
-from fastapi import FastAPI, Depends, Request, Header, HTTPException
+from settings import settings
+from pydantic import BaseModel
+from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from browser import url_to_page_text
 import llm
@@ -15,7 +16,7 @@ FRONTEND_BASE = "https://tarsier.vercel.app"
 app = FastAPI()
 origins = [FRONTEND_BASE, "http://localhost:3000"]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-stripe.api_key = os.environ["STRIPE_KEY"]
+stripe.api_key = settings.stripe_key
 
 def check_user_api_limit(user_id: str, metadata):
     count = db.get_job_count_by_user_cur_month(user_id)
@@ -29,14 +30,19 @@ def check_user_api_limit(user_id: str, metadata):
     return True
  
 @app.post("/page-text")
-async def get_page_text(data: PageTextData, user: User = Depends(validate_api_key)) -> str: 
+async def get_page_text(data: PageTextData, user: User = Depends(validate_api_key)): 
     metadata = user["user"].get("metadata", {})
     if not check_user_api_limit(user["user_id"], metadata):
         raise HTTPException(status_code=401, detail="api request limit for month reached")
     
-    text = await url_to_page_text(data.url)
+    return_img = data.options and data.options.return_image
+    text, img = await url_to_page_text(data.url, return_img)
+    response = { 'data': text }
+    if return_img:
+        response["image"] = img
+
     db.create_page_text_job(user["user_id"], data.url, text)
-    return text
+    return response
 
 
 @app.post("/extract")
@@ -45,7 +51,7 @@ async def extract_data(data: ExtractData, user: User = Depends(validate_api_key)
     if not check_user_api_limit(user["user_id"], metadata):
         raise HTTPException(status_code=401, detail="api request limit for month reached")
 
-    page_text = await url_to_page_text(data.url)
+    page_text, img = await url_to_page_text(data.url)
     extracted_data = await llm.structured_data_from_page_text(page_text, data.outputSchema)
     print(extracted_data)
 
@@ -55,6 +61,20 @@ async def extract_data(data: ExtractData, user: User = Depends(validate_api_key)
 
     db.create_extraction_job(user["user_id"], data.url, page_text, data.outputSchema, extracted_data)
     return response
+
+class PlaygroundData(BaseModel):
+    url: str
+    
+@app.post("/playground")
+async def playground(data: PlaygroundData, user: User = Depends(auth.require_user)):
+    print(data.url, user.user_id)
+    page_text, img = await url_to_page_text(data.url, True)
+    db.create_page_text_job(user.user_id, data.url, page_text)
+
+    return {
+        "data": page_text,
+        "image": img
+    }
 
 
 @app.get("/jobs")
@@ -90,7 +110,7 @@ async def create_session(user: User = Depends(auth.require_user)):
 
 @app.post("/stripe-webhook")
 async def webhook_received(event: dict, request: Request):
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    webhook_secret = settings.stripe_webhook_secret
     raw_body = await request.body()
     stripe_signature = request.headers.get("stripe-signature")
 
